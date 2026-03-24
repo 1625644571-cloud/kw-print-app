@@ -404,13 +404,40 @@ document.addEventListener('DOMContentLoaded', function() {
         async testPrint() {
             try {
                 this.log('开始测试打印...', 'info');
-                const locationCode = 'TEST-01-01';
-                const content = `库位码标签\n库位码: ${locationCode}\n商品: 测试商品\n数量: 1\n时间: ${new Date().toLocaleString('zh-CN')}\n`;
-                await this.sendToPrinter(content);
+                await this.printLabel('TEST-01-01', '测试商品', 1);
                 this.log('测试打印成功！请检查打印机出纸', 'success');
             } catch (error) {
                 this.log(`测试打印失败: ${error.message}`, 'error');
             }
+        },
+
+        // 打印库位码标签（ESC/POS指令）
+        async printLabel(locationCode, itemName, quantity) {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('zh-CN');
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+
+            const enc = (str) => Array.from(new TextEncoder().encode(str));
+
+            const cmd = [
+                0x1B, 0x40,              // ESC @ 初始化
+                0x1B, 0x61, 0x01,        // 居中
+                0x1D, 0x21, 0x11,        // 双倍字体
+                ...enc('库位码标签\n'),
+                0x1D, 0x21, 0x00,        // 恢复正常字体
+                0x1B, 0x61, 0x00,        // 左对齐
+                0x0A,                    // 空行
+                0x1B, 0x45, 0x01,        // 加粗
+                ...enc(`库位码: ${locationCode}\n`),
+                0x1B, 0x45, 0x00,        // 取消加粗
+                ...enc(`商品: ${itemName}\n`),
+                ...enc(`数量: ${quantity}\n`),
+                ...enc(`日期: ${dateStr} ${timeStr}\n`),
+                0x0A, 0x0A, 0x0A,        // 进纸3行
+                0x1D, 0x56, 0x41, 0x10   // 切纸
+            ];
+
+            await this.sendToPrinter(new Uint8Array(cmd));
         },
 
         // 分包发送（每包≤200字节）
@@ -420,18 +447,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!this.config.isConnected) throw new Error('打印机未连接');
 
             try {
-                const bytes = new TextEncoder().encode(data);
+                const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
                 const CHUNK = 200;
                 for (let i = 0; i < bytes.length; i += CHUNK) {
                     const chunk = bytes.slice(i, i + CHUNK);
-                    const base64 = btoa(String.fromCharCode(...chunk));
+                    // btoa 处理二进制数据
+                    const base64 = btoa(Array.from(chunk).map(b => String.fromCharCode(b)).join(''));
                     await ble.write({
                         deviceId:       this.config.printerMac,
                         service:        this.BLE.SERVICE,
                         characteristic: this.BLE.WRITE_CHAR,
                         value:          base64
                     });
-                    await new Promise(r => setTimeout(r, 20));
+                    await new Promise(r => setTimeout(r, 50));
                 }
                 return true;
             } catch (error) {
