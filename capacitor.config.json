@@ -34,10 +34,6 @@
     "webContentsDebuggingEnabled": true
   },
   "server": {
-    "androidScheme": "https",
-    "cleartext": true,
-    "allowNavigation": [
-      "*"
-    ]
+    "androidScheme": "https"
   }
 }

@@ -1,0 +1,6 @@
+{
+  "appId": "com.kwprint.app",
+  "appName": "库位码打印",
+  "webDir": ".",
+  "bundledWebRuntime": false
+}

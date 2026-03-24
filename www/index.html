@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>库位码自动打印</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { padding: 20px 15px; max-width: 500px; margin: 0 auto; }
+        
+        .header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #2c7eff; }
+        .header h1 { font-size: 24px; color: #2c7eff; font-weight: 600; margin-bottom: 5px; }
+        .header p { color: #666; font-size: 14px; }
+        
+        .status-card, .config-card, .log-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        
+        .status-title, .config-title, .log-title {
+            font-size: 18px; font-weight: 600; margin-bottom: 15px; 
+            display: flex; align-items: center;
+        }
+        .status-title::before, .config-title::before, .log-title::before {
+            content: "•"; color: #2c7eff; margin-right: 8px; font-size: 20px;
+        }
+        
+        .status-item { display: flex; align-items: center; margin: 12px 0; }
+        .status-label { width: 120px; font-weight: 500; color: #666; }
+        .status-value { flex: 1; display: flex; align-items: center; }
+        .status-badge {
+            padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;
+            margin-left: 10px;
+        }
+        .status-online { background: #e8f5e9; color: #2e7d32; }
+        .status-offline { background: #ffebee; color: #c62828; }
+        .status-pending { background: #fff3e0; color: #f57c00; }
+        
+        .status-icon {
+            width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;
+        }
+        .icon-green { background: #4caf50; }
+        .icon-red { background: #f44336; }
+        .icon-orange { background: #ff9800; animation: pulse 2s infinite; }
+        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .btn-group { display: flex; gap: 12px; margin-top: 25px; }
+        .btn {
+            flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 16px; 
+            font-weight: 600; cursor: pointer; text-align: center; transition: all 0.3s;
+        }
+        .btn-primary { background: #2c7eff; color: white; }
+        .btn-primary:active { background: #1a6de8; transform: translateY(-2px); }
+        .btn-secondary { background: #f0f0f0; color: #555; }
+        .btn-secondary:active { background: #e0e0e0; }
+        .btn-danger { background: #ff4757; color: white; }
+        .btn-disabled { background: #ccc; color: #888; cursor: not-allowed; }
+        
+        /* 打印机选择样式 */
+        .printer-option {
+            border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 12px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .printer-option:hover { border-color: #2c7eff; background: #f0f7ff; }
+        .printer-option.selected { border-color: #2c7eff; background: #e3f2fd; }
+        .printer-name { font-weight: 600; margin-bottom: 4px; }
+        .printer-mac { font-size: 13px; color: #666; font-family: monospace; }
+        
+        label { display: block; margin: 15px 0 8px; font-weight: 500; color: #444; }
+        input[type="text"], select {
+            width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 16px; background: white;
+        }
+        input:focus, select:focus { outline: none; border-color: #2c7eff; }
+        
+        /* 日志区域 */
+        .log-area {
+            height: 200px; overflow-y: auto; background: #fafafa; border: 1px solid #eee;
+            border-radius: 8px; padding: 15px; font-family: monospace; font-size: 13px;
+        }
+        .log-entry { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+        .log-time { color: #888; margin-right: 10px; }
+        .log-info { color: #2c7eff; }
+        .log-warn { color: #ff9800; }
+        .log-error { color: #f44336; }
+        .log-success { color: #4caf50; }
+        
+        /* 悬浮状态球 */
+        #floatingBall {
+            position: fixed; bottom: 30px; right: 20px; width: 50px; height: 50px; 
+            border-radius: 50%; background: #2c7eff; color: white; display: flex;
+            align-items: center; justify-content: center; font-size: 22px;
+            box-shadow: 0 6px 20px rgba(44, 126, 255, 0.4); cursor: pointer;
+            z-index: 10000; touch-action: none; user-select: none;
+        }
+        .floating-ball-text { font-size: 12px; position: absolute; top: -25px; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>库位码自动打印</h1>
+            <p>后台监听牵牛花APP，确认收货时自动打印库位码标签</p>
+        </div>
+        
+        <!-- 状态卡片 -->
+        <div class="status-card">
+            <div class="status-title">运行状态</div>
+            
+            <div class="status-item">
+                <div class="status-label">监听状态</div>
+                <div class="status-value">
+                    <div class="status-icon" id="monitorIcon"></div>
+                    <span id="monitorStatus">未启动</span>
+                    <div id="monitorBadge" class="status-badge status-offline">离线</div>
+                </div>
+            </div>
+            
+            <div class="status-item">
+                <div class="status-label">蓝牙打印机</div>
+                <div class="status-value">
+                    <div class="status-icon" id="printerIcon"></div>
+                    <span id="printerName">未连接</span>
+                    <div id="printerBadge" class="status-badge status-offline">离线</div>
+                </div>
+            </div>
+            
+            <div class="status-item">
+                <div class="status-label">牵牛花APP</div>
+                <div class="status-value">
+                    <div class="status-icon" id="qnhIcon"></div>
+                    <span id="qnhStatus">待检测</span>
+                    <div id="qnhBadge" class="status-badge status-pending">检测中</div>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button id="toggleBtn" class="btn btn-primary">启动监听</button>
+                <button id="testPrintBtn" class="btn btn-secondary">测试打印</button>
+            </div>
+        </div>
+        
+        <!-- 配置卡片 -->
+        <div class="config-card">
+            <div class="config-title">打印机配置</div>
+            
+            <div id="bluetoothDeviceList">
+                <div class="printer-option" id="scanningMsg">
+                    <div class="printer-name">正在扫描蓝牙设备...</div>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button id="scanBtn" class="btn btn-secondary">重新扫描</button>
+                <button id="connectBtn" class="btn btn-primary" disabled>连接打印机</button>
+            </div>
+            
+            <label for="locationPattern">库位码匹配规则</label>
+            <input type="text" id="locationPattern" value="^[A-Z]{2,3}-\d+-\d+$" 
+                   placeholder="正则表达式，如 ^[A-Z]{2,3}-\d+-\d+$">
+            <small style="color: #666; display: block; margin-top: 5px; font-size: 13px;">
+                用于识别牵牛花页面上的库位码（如 HZ-1-2 或 BJ-12-08）
+            </small>
+        </div>
+        
+        <!-- 日志卡片 -->
+        <div class="log-card">
+            <div class="log-title">运行日志</div>
+            <div class="log-area" id="logView"></div>
+            <button id="clearLogBtn" class="btn btn-secondary" style="margin-top: 12px;">清除日志</button>
+        </div>
+    </div>
+    
+    <!-- 悬浮状态球 -->
+    <div id="floatingBall" style="display: none;">
+        <div class="floating-ball-text" id="ballText">监听中</div>
+        <span id="ballIcon">📄</span>
+    </div>
+
+    <!-- Capacitor 核心（必须最先加载） -->
+    <script src="capacitor.js"></script>
+    <!-- 脚本 -->
+    <script src="app.js"></script>
+</body>
+</html>

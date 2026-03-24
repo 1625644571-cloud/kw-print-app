@@ -34,11 +34,14 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
-      - name: Create www directory
+      - name: Prepare www directory
         run: |
           mkdir -p www
-          cp index.html www/index.html
-          cp app.js www/app.js
+          # 只补充 www 里缺少的文件，不覆盖已有文件
+          [ -f "printer.js" ] && cp -n printer.js www/printer.js || true
+          [ -f "printer_detong.js" ] && cp -n printer_detong.js www/printer_detong.js || true
+          echo "=== www目录内容 ==="
+          ls -la www/
 
       - name: Add Android Platform
         run: |

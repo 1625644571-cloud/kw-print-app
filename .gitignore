@@ -1,0 +1,27 @@
+# 依赖目录
+node_modules/
+
+# 构建输出
+app/build/
+*.apk
+*.aab
+
+# Gradle
+.gradle/
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+.DS_Store
+
+# Capacitor
+.capacitor/
+android/
+
+# 日志
+*.log
+
+# 临时文件
+tmp/
+temp/

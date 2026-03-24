@@ -1,0 +1,40 @@
+version: '1.0'
+name: Build Android APK
+displayName: 构建安卓APK
+
+triggers:
+  push:
+    branches:
+      - main
+      - master
+
+stages:
+  - name: build
+    displayName: 编译APK
+    steps:
+      - step: build@nodejs
+        name: install_deps
+        displayName: 安装依赖
+        inputs:
+          nodeVersion: 18.x
+          run: |
+            npm install
+            npm install -g @capacitor/cli
+
+      - step: build@android
+        name: build_apk
+        displayName: 构建APK
+        inputs:
+          javaVersion: 17
+          run: |
+            npx cap sync android
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
+
+      - step: publish@general_artifacts
+        name: upload_apk
+        displayName: 上传APK
+        inputs:
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          artifactName: kw-print-app.apk
