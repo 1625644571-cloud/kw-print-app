@@ -39,8 +39,6 @@ jobs:
           mkdir -p www
           cp index.html www/index.html
           cp app.js www/app.js
-          cp printer.js www/printer.js
-          cp printer_detong.js www/printer_detong.js
 
       - name: Add Android Platform
         run: |
@@ -51,7 +49,7 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Add BLE Permissions to AndroidManifest
+      - name: Replace AndroidManifest with BLE permissions
         run: |
           cp android_manifest_ble.xml android/app/src/main/AndroidManifest.xml
           echo "=== AndroidManifest.xml ==="
