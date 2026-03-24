@@ -34,6 +34,14 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
+      - name: Create www directory
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+          cp app.js www/app.js
+          cp printer.js www/printer.js
+          cp printer_detong.js www/printer_detong.js
+
       - name: Add Android Platform
         run: |
           if [ ! -d "android" ]; then
@@ -57,4 +65,3 @@ jobs:
           name: kw-print-app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-
