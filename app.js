@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
 
         bleInitialized: false,
+        _scanListener: null,
 
         BLE: {
             SERVICE:     '49535343-fe7d-4ae5-8fa9-9fafd205e455',
@@ -223,25 +224,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 const ok = await this.checkPermissions();
                 if (!ok) return;
             }
+
             this.log('开始扫描全部BLE设备（8秒）...', 'info');
             this.dom.bluetoothDeviceList.innerHTML =
                 '<div class="printer-option"><div class="printer-name">正在扫描，请确保打印机已开机...</div></div>';
+
             const found = [];
+
+            // 先移除旧监听，防止重复注册
+            if (this._scanListener) {
+                try { this._scanListener.remove(); } catch (_) {}
+                this._scanListener = null;
+            }
+
             try {
-                // 不加 services 过滤，扫全部 BLE 设备（兼容华为/小米等机型）
-                await ble.requestLEScan(
-                    { allowDuplicates: false },
-                    (result) => {
-                        const dev = result.device;
-                        if (!found.find(d => d.deviceId === dev.deviceId)) {
-                            found.push(dev);
-                            this.showBluetoothDevices(found);
-                            this.log(`发现设备: ${dev.name || dev.deviceId}`, 'info');
-                        }
+                // 正确写法：通过 addListener 订阅扫描结果事件
+                this._scanListener = await ble.addListener('onScanResult', (result) => {
+                    const dev = result.device;
+                    if (dev && !found.find(d => d.deviceId === dev.deviceId)) {
+                        found.push(dev);
+                        this.showBluetoothDevices(found);
+                        this.log(`发现设备: ${dev.name || dev.deviceId}`, 'info');
                     }
-                );
+                });
+
+                // 开始扫描，不加 services 过滤（兼容华为/小米等机型）
+                await ble.requestLEScan({ allowDuplicates: false });
+
+                // 8秒后停止
                 setTimeout(async () => {
                     try { await ble.stopLEScan(); } catch (_) {}
+                    if (this._scanListener) {
+                        try { this._scanListener.remove(); } catch (_) {}
+                        this._scanListener = null;
+                    }
                     if (found.length === 0) {
                         this.dom.bluetoothDeviceList.innerHTML =
                             '<div class="printer-option"><div class="printer-name">未发现任何BLE设备，请确认打印机已开机且蓝牙已开启</div></div>';
@@ -250,16 +266,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.log(`扫描完成，共发现 ${found.length} 个设备，请选择打印机`, 'success');
                     }
                 }, 8000);
+
             } catch (error) {
                 this.log(`BLE扫描失败: ${error.message}`, 'error');
                 this.dom.bluetoothDeviceList.innerHTML =
                     '<div class="printer-option"><div class="printer-name">扫描失败，请检查蓝牙和位置权限是否已开启</div></div>';
+                if (this._scanListener) {
+                    try { this._scanListener.remove(); } catch (_) {}
+                    this._scanListener = null;
+                }
             }
         },
 
         showBluetoothDevices(devices) {
             this.dom.bluetoothDeviceList.innerHTML = '';
-            // P1/DETONG 排最前面
             const sorted = [...devices].sort((a, b) => {
                 const aIsPrinter = /p1|detong|dt/i.test(a.name || '');
                 const bIsPrinter = /p1|detong|dt/i.test(b.name || '');
@@ -342,49 +362,4 @@ document.addEventListener('DOMContentLoaded', function() {
                 const locationCode = 'TEST-01-01';
                 const content = `库位码标签\n库位码: ${locationCode}\n商品: 测试商品\n数量: 1\n时间: ${new Date().toLocaleString('zh-CN')}\n`;
                 await this.sendToPrinter(content);
-                this.log('测试打印成功！请检查打印机出纸', 'success');
-            } catch (error) {
-                this.log(`测试打印失败: ${error.message}`, 'error');
-            }
-        },
-
-        async sendToPrinter(data) {
-            const ble = this.getBLE();
-            if (!ble) throw new Error('BLE插件未就绪');
-            if (!this.config.isConnected) throw new Error('打印机未连接');
-            try {
-                const bytes = new TextEncoder().encode(data);
-                const CHUNK = 200;
-                for (let i = 0; i < bytes.length; i += CHUNK) {
-                    const chunk = bytes.slice(i, i + CHUNK);
-                    const base64 = btoa(String.fromCharCode(...chunk));
-                    await ble.write({
-                        deviceId:       this.config.printerMac,
-                        service:        this.BLE.SERVICE,
-                        characteristic: this.BLE.WRITE_CHAR,
-                        value:          base64
-                    });
-                    await new Promise(r => setTimeout(r, 20));
-                }
-                return true;
-            } catch (error) {
-                this.config.isConnected = false;
-                this.updateUI();
-                throw new Error(`发送到打印机失败: ${error.message}`);
-            }
-        },
-
-        extractLocationCode(text) {
-            try {
-                const pattern = new RegExp(this.config.locationPattern, 'gi');
-                const matches = text.match(pattern);
-                return matches && matches.length > 0 ? matches[0] : null;
-            } catch (error) {
-                this.log(`库位码提取失败: ${error.message}`, 'error');
-                return null;
-            }
-        }
-    };
-
-    App.init();
-});
+                
