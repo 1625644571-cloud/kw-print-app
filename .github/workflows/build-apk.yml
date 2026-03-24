@@ -20,7 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -50,6 +50,14 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Add BLE Permissions to AndroidManifest
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # 添加BLE所需权限（Android 12+）
+          if ! grep -q "BLUETOOTH_SCAN" "$MANIFEST"; then
+            sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />|' "$MANIFEST"
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
