@@ -253,6 +253,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             try {
+                // 第一步：检查并申请权限
+                this.log('正在申请蓝牙权限...', 'info');
+                const checkResult = await ble.checkPermissions();
+                this.log(`权限状态: ${JSON.stringify(checkResult)}`, 'info');
+
+                if (checkResult.location !== 'granted' || checkResult.bluetooth !== 'granted') {
+                    const reqResult = await ble.requestPermissions();
+                    this.log(`权限申请结果: ${JSON.stringify(reqResult)}`, 'info');
+                    if (reqResult.bluetooth !== 'granted') {
+                        this.log('蓝牙权限被拒绝，请在手机设置中手动开启', 'error');
+                        return false;
+                    }
+                }
+
+                // 第二步：初始化BLE
                 await ble.initialize();
                 this.log('蓝牙BLE初始化成功', 'success');
                 return true;
