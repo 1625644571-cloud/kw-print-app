@@ -53,28 +53,9 @@ jobs:
 
       - name: Add BLE Permissions to AndroidManifest
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # 安装xmlstarlet
-          sudo apt-get install -y xmlstarlet
-
-          # 用xmlstarlet检查并添加权限
-          add_perm() {
-            local perm=$1
-            if ! xmlstarlet sel -t -v "//uses-permission[@android:name='$perm']" "$MANIFEST" > /dev/null 2>&1; then
-              xmlstarlet ed -L \
-                -s "/manifest" -t elem -n "uses-permission" \
-                -i "/manifest/uses-permission[last()]" -t attr -n "android:name" -v "$perm" \
-                "$MANIFEST" || true
-            fi
-          }
-
-          # 直接用sed在</manifest>前插入，最简单可靠
-          if ! grep -q "BLUETOOTH_SCAN" "$MANIFEST"; then
-            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />\n</manifest>|' "$MANIFEST"
-          fi
-
+          cp android_manifest_ble.xml android/app/src/main/AndroidManifest.xml
           echo "=== AndroidManifest.xml ==="
-          cat "$MANIFEST"
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
