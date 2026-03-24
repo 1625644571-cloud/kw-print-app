@@ -367,6 +367,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.updateUI();
                 this.log(`打印机连接成功: ${this.config.printerName}`, 'success');
 
+                // 自动探测真实UUID
+                try {
+                    const services = await ble.getServices({ deviceId: this.selectedDevice.deviceId });
+                    this.log(`发现 ${services.services.length} 个服务:`, 'info');
+                    for (const svc of services.services) {
+                        this.log(`SERVICE: ${svc.uuid}`, 'info');
+                        for (const ch of (svc.characteristics || [])) {
+                            const props = ch.properties ? Object.keys(ch.properties).filter(k => ch.properties[k]).join(',') : '';
+                            this.log(`  CHAR: ${ch.uuid} [${props}]`, 'info');
+                            // 找到可写特征，自动更新UUID配置
+                            if (ch.properties && (ch.properties.write || ch.properties.writeWithoutResponse)) {
+                                this.BLE.SERVICE    = svc.uuid;
+                                this.BLE.WRITE_CHAR = ch.uuid;
+                                this.log(`★ 已自动设置写入通道: ${svc.uuid} / ${ch.uuid}`, 'success');
+                            }
+                        }
+                    }
+                } catch (e) {
+                    this.log(`UUID探测失败(不影响使用): ${e.message}`, 'warning');
+                }
+
             } catch (error) {
                 this.config.isConnected = false;
                 this.updateUI();
