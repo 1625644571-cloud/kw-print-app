@@ -254,27 +254,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             try {
-                // 第一步：检查并申请权限
+                // 先尝试申请权限（不做判断，直接申请，系统会忽略已授权的）
                 this.log('正在申请蓝牙权限...', 'info');
-                const checkResult = await ble.checkPermissions();
-                this.log(`权限状态: ${JSON.stringify(checkResult)}`, 'info');
-
-                if (checkResult.location !== 'granted' || checkResult.bluetooth !== 'granted') {
+                try {
                     const reqResult = await ble.requestPermissions();
                     this.log(`权限申请结果: ${JSON.stringify(reqResult)}`, 'info');
-                    if (reqResult.bluetooth !== 'granted') {
-                        this.log('蓝牙权限被拒绝，请在手机设置中手动开启', 'error');
-                        return false;
-                    }
+                } catch(permErr) {
+                    this.log(`权限申请异常(忽略): ${permErr.message}`, 'warning');
                 }
 
-                // 第二步：初始化BLE
+                // 直接尝试初始化，让系统决定是否有权限
                 await ble.initialize();
                 this.bleInitialized = true;
                 this.log('蓝牙BLE初始化成功', 'success');
                 return true;
             } catch (e) {
                 this.log(`BLE初始化失败: ${e.message}`, 'error');
+                this.log('请到手机设置→应用→库位码打印→权限，手动开启蓝牙和位置权限', 'warning');
                 return false;
             }
         },
