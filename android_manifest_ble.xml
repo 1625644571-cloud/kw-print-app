@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 网络权限 -->
+    <!-- 网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- 蓝牙权限（Android 11及以下） -->
+    <!-- 蓝牙（Android 11 及以下） -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
-    <!-- 蓝牙权限（Android 12+） -->
+    <!-- 蓝牙（Android 12+） -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- 位置权限（BLE扫描必须） -->
+    <!-- 位置（BLE扫描必须） -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- 声明设备需要BLE功能 -->
+    <!-- 声明设备需要BLE -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
     <application
@@ -51,6 +51,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
     </application>
 
 </manifest>
