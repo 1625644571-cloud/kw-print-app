@@ -411,36 +411,42 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
+        // Uint8Array 转 DataView（Capacitor BLE write 需要）
+        toDataView(bytes) {
+            return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        },
+
         // 打印库位码标签（ESC/POS指令）
         async printLabel(locationCode, itemName, quantity) {
             const now = new Date();
-            const dateStr = now.toLocaleDateString('zh-CN');
-            const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+            const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
+            // 只用ASCII内容避免中文编码问题，中文行用GBK兼容方案
             const enc = (str) => Array.from(new TextEncoder().encode(str));
 
-            const cmd = [
+            const cmd = new Uint8Array([
                 0x1B, 0x40,              // ESC @ 初始化
                 0x1B, 0x61, 0x01,        // 居中
                 0x1D, 0x21, 0x11,        // 双倍字体
-                ...enc('库位码标签\n'),
+                ...enc('Location Label\n'),
                 0x1D, 0x21, 0x00,        // 恢复正常字体
-                0x1B, 0x61, 0x00,        // 左对齐
                 0x0A,                    // 空行
                 0x1B, 0x45, 0x01,        // 加粗
-                ...enc(`库位码: ${locationCode}\n`),
+                ...enc(`Code: ${locationCode}\n`),
                 0x1B, 0x45, 0x00,        // 取消加粗
-                ...enc(`商品: ${itemName}\n`),
-                ...enc(`数量: ${quantity}\n`),
-                ...enc(`日期: ${dateStr} ${timeStr}\n`),
+                ...enc(`Item: ${itemName}\n`),
+                ...enc(`Qty : ${quantity}\n`),
+                ...enc(`Date: ${dateStr} ${timeStr}\n`),
                 0x0A, 0x0A, 0x0A,        // 进纸3行
                 0x1D, 0x56, 0x41, 0x10   // 切纸
-            ];
+            ]);
 
-            await this.sendToPrinter(new Uint8Array(cmd));
+            await this.sendToPrinter(cmd);
         },
 
-        // 分包发送（每包≤200字节）
+        // 分包发送（每包≤200字节，value传DataView）
         async sendToPrinter(data) {
             const ble = this.getBLE();
             if (!ble) throw new Error('BLE插件未就绪');
@@ -451,13 +457,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const CHUNK = 200;
                 for (let i = 0; i < bytes.length; i += CHUNK) {
                     const chunk = bytes.slice(i, i + CHUNK);
-                    // btoa 处理二进制数据
-                    const base64 = btoa(Array.from(chunk).map(b => String.fromCharCode(b)).join(''));
                     await ble.write({
                         deviceId:       this.config.printerMac,
                         service:        this.BLE.SERVICE,
                         characteristic: this.BLE.WRITE_CHAR,
-                        value:          base64
+                        value:          this.toDataView(chunk)
                     });
                     await new Promise(r => setTimeout(r, 50));
                 }
