@@ -223,19 +223,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 const ok = await this.checkPermissions();
                 if (!ok) return;
             }
-            this.log('开始扫描BLE打印机（5秒）...', 'info');
+            this.log('开始扫描全部BLE设备（8秒）...', 'info');
             this.dom.bluetoothDeviceList.innerHTML =
                 '<div class="printer-option"><div class="printer-name">正在扫描，请确保打印机已开机...</div></div>';
             const found = [];
             try {
+                // 不加 services 过滤，扫全部 BLE 设备（兼容华为/小米等机型）
                 await ble.requestLEScan(
-                    { services: [this.BLE.SERVICE], allowDuplicates: false },
+                    { allowDuplicates: false },
                     (result) => {
                         const dev = result.device;
                         if (!found.find(d => d.deviceId === dev.deviceId)) {
                             found.push(dev);
                             this.showBluetoothDevices(found);
-                            this.log(`发现设备: ${dev.name || dev.deviceId}`, 'success');
+                            this.log(`发现设备: ${dev.name || dev.deviceId}`, 'info');
                         }
                     }
                 );
@@ -243,12 +244,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     try { await ble.stopLEScan(); } catch (_) {}
                     if (found.length === 0) {
                         this.dom.bluetoothDeviceList.innerHTML =
-                            '<div class="printer-option"><div class="printer-name">未找到德佟P1打印机，请确认打印机已开机后重新扫描</div></div>';
-                        this.log('扫描结束，未发现打印机', 'warning');
+                            '<div class="printer-option"><div class="printer-name">未发现任何BLE设备，请确认打印机已开机且蓝牙已开启</div></div>';
+                        this.log('扫描结束，未发现任何设备', 'warning');
                     } else {
-                        this.log(`扫描完成，共发现 ${found.length} 台打印机`, 'success');
+                        this.log(`扫描完成，共发现 ${found.length} 个设备，请选择打印机`, 'success');
                     }
-                }, 5000);
+                }, 8000);
             } catch (error) {
                 this.log(`BLE扫描失败: ${error.message}`, 'error');
                 this.dom.bluetoothDeviceList.innerHTML =
@@ -258,11 +259,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
         showBluetoothDevices(devices) {
             this.dom.bluetoothDeviceList.innerHTML = '';
-            devices.forEach(device => {
+            // P1/DETONG 排最前面
+            const sorted = [...devices].sort((a, b) => {
+                const aIsPrinter = /p1|detong|dt/i.test(a.name || '');
+                const bIsPrinter = /p1|detong|dt/i.test(b.name || '');
+                return (bIsPrinter ? 1 : 0) - (aIsPrinter ? 1 : 0);
+            });
+            sorted.forEach(device => {
+                const isPrinter = /p1|detong|dt/i.test(device.name || '');
                 const div = document.createElement('div');
-                div.className = 'printer-option';
+                div.className = 'printer-option' + (isPrinter ? ' printer-highlight' : '');
                 div.innerHTML = `
-                    <div class="printer-name">${device.name || '德佟打印机'}</div>
+                    <div class="printer-name">${device.name || '未知设备'} ${isPrinter ? '🖨️' : ''}</div>
                     <div class="printer-mac">${device.deviceId}</div>
                 `;
                 div.addEventListener('click', () => {
@@ -271,7 +279,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.dom.connectBtn.disabled = false;
                     this.dom.connectBtn.className = 'btn btn-primary';
                     this.selectedDevice = device;
-                    this.log(`选中打印机: ${device.name || device.deviceId}`, 'info');
+                    this.log(`选中设备: ${device.name || device.deviceId}`, 'info');
                 });
                 this.dom.bluetoothDeviceList.appendChild(div);
             });
