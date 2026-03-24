@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
         maxLogs: 100,
         
         // 初始化
-        init() {
+        async init() {
             this.log('APP启动初始化', 'info');
             
             // 加载配置
@@ -49,16 +49,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // 绑定事件
             this.bindEvents();
             
-            // 检查权限
-            this.checkPermissions();
-            
-            // 初始化蓝牙扫描
-            this.scanBluetooth();
-            
             // 检查牵牛花APP状态
             this.checkQianNiuHua();
-            
-            this.log('初始化完成', 'success');
+
+            // 先完成权限申请和BLE初始化，再扫描
+            const ok = await this.checkPermissions();
+            if (ok) {
+                this.log('初始化完成，开始扫描...', 'success');
+                await this.scanBluetooth();
+            } else {
+                this.log('权限未授予，请手动点击扫描按钮重试', 'warning');
+            }
         },
         
         // 记录日志
@@ -269,6 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 第二步：初始化BLE
                 await ble.initialize();
+                this.bleInitialized = true;
                 this.log('蓝牙BLE初始化成功', 'success');
                 return true;
             } catch (e) {
@@ -284,6 +286,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.dom.bluetoothDeviceList.innerHTML =
                     '<div class="printer-option"><div class="printer-name">BLE插件未就绪，请重新安装APP</div></div>';
                 return;
+            }
+
+            // 如果还未初始化，先完成初始化再扫描
+            if (!this.bleInitialized) {
+                const ok = await this.checkPermissions();
+                if (!ok) return;
+                this.bleInitialized = true;
             }
 
             this.log('开始扫描BLE打印机...', 'info');
