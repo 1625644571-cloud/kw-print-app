@@ -53,11 +53,42 @@ jobs:
 
       - name: Add BLE Permissions to AndroidManifest
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # 添加BLE所需权限（Android 12+）
-          if ! grep -q "BLUETOOTH_SCAN" "$MANIFEST"; then
-            sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />|' "$MANIFEST"
-          fi
+          python3 << 'EOF'
+          import re
+
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_path, "r") as f:
+              content = f.read()
+
+          permissions = """    <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+          """
+
+          if "BLUETOOTH_SCAN" not in content:
+              content = content.replace(
+                  "<manifest ",
+                  permissions + "    <manifest ",
+                  1
+              )
+              # 如果上面没替换成功，在<application前插入
+              if "BLUETOOTH_SCAN" not in content:
+                  content = content.replace(
+                      "    <application",
+                      permissions + "    <application",
+                      1
+                  )
+
+          with open(manifest_path, "w") as f:
+              f.write(content)
+
+          print("AndroidManifest.xml updated successfully")
+          with open(manifest_path, "r") as f:
+              print(f.read())
+          EOF
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
