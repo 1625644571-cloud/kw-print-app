@@ -230,108 +230,158 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         
-        // 检查权限
-        checkPermissions() {
-            if (typeof navigator.bluetooth === 'undefined') {
-                this.log('当前环境不支持Web蓝牙API', 'error');
-                alert('当前环境不支持蓝牙功能，请确保在支持Web蓝牙的浏览器或环境中运行');
+        // 德佟P1 BLE UUID 常量
+        BLE: {
+            SERVICE:    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+            WRITE_CHAR: '49535343-8841-43f4-a8d4-ecbe34729bb3',
+            NOTIFY_CHAR:'49535343-1e4d-4bd9-ba61-23c647249616'
+        },
+
+        // 获取BLE插件
+        getBLE() {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
+                return window.Capacitor.Plugins.BluetoothLe;
+            }
+            return null;
+        },
+
+        // 检查权限并初始化BLE
+        async checkPermissions() {
+            const ble = this.getBLE();
+            if (!ble) {
+                this.log('BLE插件未加载，请重新安装APP', 'error');
                 return false;
             }
-            
-            // 检查后台运行权限（使用Capacitor时）
-            if (typeof Capacitor !== 'undefined') {
-                this.log('Capacitor环境检测通过', 'success');
-            }
-            
-            return true;
-        },
-        
-        // 扫描蓝牙设备
-        async scanBluetooth() {
             try {
-                this.log('开始扫描蓝牙设备...', 'info');
-                this.dom.bluetoothDeviceList.innerHTML = 
-                    '<div class="printer-option" id="scanningMsg"><div class="printer-name">正在扫描蓝牙设备...</div></div>';
-                
-                // 模拟蓝牙设备列表（实际使用时替换为真实蓝牙API）
-                setTimeout(() => {
-                    this.showBluetoothDevices([
-                        { name: 'GP-80160', mac: '00:11:22:AA:BB:CC', type: 'printer' },
-                        { name: 'HM-A300', mac: 'AA:BB:CC:DD:EE:FF', type: 'printer' },
-                        { name: 'NIIMBOT-D110', mac: 'FF:EE:DD:CC:BB:AA', type: 'printer' }
-                    ]);
-                }, 2000);
-                
-            } catch (error) {
-                this.log(`蓝牙扫描失败: ${error.message}`, 'error');
+                await ble.initialize();
+                this.log('蓝牙BLE初始化成功', 'success');
+                return true;
+            } catch (e) {
+                this.log(`BLE初始化失败: ${e.message}`, 'error');
+                return false;
             }
         },
-        
-        // 显示蓝牙设备列表
-        showBluetoothDevices(devices) {
-            this.dom.bluetoothDeviceList.innerHTML = '';
-            
-            if (devices.length === 0) {
-                this.dom.bluetoothDeviceList.innerHTML = 
-                    '<div class="printer-option"><div class="printer-name">未发现蓝牙打印机</div></div>';
+
+        // 扫描BLE设备（只扫描德佟打印服务UUID）
+        async scanBluetooth() {
+            const ble = this.getBLE();
+            if (!ble) {
+                this.dom.bluetoothDeviceList.innerHTML =
+                    '<div class="printer-option"><div class="printer-name">BLE插件未就绪，请重新安装APP</div></div>';
                 return;
             }
-            
+
+            this.log('开始扫描BLE打印机...', 'info');
+            this.dom.bluetoothDeviceList.innerHTML =
+                '<div class="printer-option"><div class="printer-name">正在扫描...</div></div>';
+
+            const found = [];
+
+            try {
+                // 扫描5秒，过滤德佟服务UUID
+                await ble.requestLEScan(
+                    { services: [this.BLE.SERVICE], allowDuplicates: false },
+                    (result) => {
+                        const dev = result.device;
+                        if (!found.find(d => d.deviceId === dev.deviceId)) {
+                            found.push(dev);
+                            this.showBluetoothDevices(found);
+                            this.log(`发现设备: ${dev.name || dev.deviceId}`, 'success');
+                        }
+                    }
+                );
+
+                // 5秒后停止扫描
+                setTimeout(async () => {
+                    try { await ble.stopLEScan(); } catch(_) {}
+                    if (found.length === 0) {
+                        this.dom.bluetoothDeviceList.innerHTML =
+                            '<div class="printer-option"><div class="printer-name">未找到德佟P1打印机，请确认打印机已开机</div></div>';
+                        this.log('扫描结束，未发现打印机', 'warning');
+                    } else {
+                        this.log(`扫描完成，共发现${found.length}台打印机`, 'success');
+                    }
+                }, 5000);
+
+            } catch (error) {
+                this.log(`BLE扫描失败: ${error.message}`, 'error');
+                this.dom.bluetoothDeviceList.innerHTML =
+                    '<div class="printer-option"><div class="printer-name">扫描失败，请检查蓝牙权限</div></div>';
+            }
+        },
+
+        // 显示BLE设备列表
+        showBluetoothDevices(devices) {
+            this.dom.bluetoothDeviceList.innerHTML = '';
+
             devices.forEach(device => {
                 const div = document.createElement('div');
                 div.className = 'printer-option';
                 div.innerHTML = `
-                    <div class="printer-name">${device.name}</div>
-                    <div class="printer-mac">${device.mac}</div>
+                    <div class="printer-name">${device.name || '未知设备'}</div>
+                    <div class="printer-mac">${device.deviceId}</div>
                 `;
-                
+
                 div.addEventListener('click', () => {
-                    // 清除其他选中状态
                     document.querySelectorAll('.printer-option').forEach(el => {
                         el.classList.remove('selected');
                     });
-                    
-                    // 选中当前设备
                     div.classList.add('selected');
-                    
-                    // 启用连接按钮
                     this.dom.connectBtn.disabled = false;
                     this.dom.connectBtn.className = 'btn btn-primary';
-                    
-                    // 保存选中设备
                     this.selectedDevice = device;
-                    this.log(`选中打印机: ${device.name} (${device.mac})`, 'info');
+                    this.log(`选中打印机: ${device.name || device.deviceId}`, 'info');
                 });
-                
+
                 this.dom.bluetoothDeviceList.appendChild(div);
             });
-            
-            this.log(`发现${devices.length}个蓝牙设备`, 'success');
         },
-        
-        // 连接打印机
+
+        // 连接BLE打印机
         async connectToPrinter() {
             if (!this.selectedDevice) {
                 alert('请先选择要连接的打印机');
                 return;
             }
-            
+
+            const ble = this.getBLE();
+            if (!ble) {
+                alert('BLE插件未就绪');
+                return;
+            }
+
             try {
-                this.log(`正在连接打印机: ${this.selectedDevice.name}...`, 'info');
-                
-                // 模拟连接过程
-                setTimeout(() => {
-                    this.config.printerName = this.selectedDevice.name;
-                    this.config.printerMac = this.selectedDevice.mac;
-                    this.config.isConnected = true;
-                    this.saveConfig();
-                    this.updateUI();
-                    
-                    this.log(`打印机连接成功: ${this.selectedDevice.name}`, 'success');
-                }, 1000);
-                
+                this.log(`正在连接: ${this.selectedDevice.name || this.selectedDevice.deviceId}...`, 'info');
+                this.dom.connectBtn.disabled = true;
+                this.dom.connectBtn.textContent = '连接中...';
+
+                // 停止扫描再连接
+                try { await ble.stopLEScan(); } catch(_) {}
+
+                await ble.connect({
+                    deviceId: this.selectedDevice.deviceId,
+                    onDisconnect: () => {
+                        this.config.isConnected = false;
+                        this.updateUI();
+                        this.log('打印机已断开连接', 'warning');
+                    }
+                });
+
+                this.config.printerName = this.selectedDevice.name || this.selectedDevice.deviceId;
+                this.config.printerMac = this.selectedDevice.deviceId;
+                this.config.isConnected = true;
+                this.saveConfig();
+                this.updateUI();
+                this.log(`打印机连接成功: ${this.config.printerName}`, 'success');
+
             } catch (error) {
+                this.config.isConnected = false;
+                this.updateUI();
                 this.log(`打印机连接失败: ${error.message}`, 'error');
+                alert(`连接失败: ${error.message}\n请确保打印机已开机并在附近`);
+            } finally {
+                this.dom.connectBtn.disabled = false;
+                this.dom.connectBtn.textContent = '连接打印机';
             }
         },
         
@@ -398,33 +448,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         
-        // 发送到打印机（ESC/POS指令）
-        async sendToPrinter(content) {
+        // 发送数据到BLE打印机（分包发送，每包≤200字节）
+        async sendToPrinter(data) {
+            const ble = this.getBLE();
+            if (!ble) throw new Error('BLE插件未就绪');
+            if (!this.config.isConnected) throw new Error('打印机未连接');
+
             try {
-                // 这里是ESC/POS指令示例
-                // 实际指令根据打印机型号调整
-                const escposCommands = [
-                    '\x1B\x40', // 初始化
-                    '\x1D\x21\x11', // 字体大小
-                    content,
-                    '\n\n\n', // 切纸
-                    '\x1B\x64\x03' // 进纸3行
-                ];
-                
-                // 模拟打印
-                this.log(`发送打印指令: ${content.substring(0, 50)}...`, 'info');
-                
-                // 实际代码使用Web Bluetooth API:
-                // const device = await navigator.bluetooth.requestDevice(...);
-                // const server = await device.gatt.connect();
-                // const service = await server.getPrimaryService(...);
-                // const characteristic = await service.getCharacteristic(...);
-                // await characteristic.writeValue(new TextEncoder().encode(escposCommands.join('')));
-                
-                // 这里模拟打印成功
+                // 将字符串转为UTF-8字节
+                const encoder = new TextEncoder();
+                const bytes = encoder.encode(data);
+
+                // 德佟P1每包最大200字节，分包发送
+                const CHUNK = 200;
+                for (let i = 0; i < bytes.length; i += CHUNK) {
+                    const chunk = bytes.slice(i, i + CHUNK);
+                    // 转为base64
+                    const base64 = btoa(String.fromCharCode(...chunk));
+                    await ble.write({
+                        deviceId: this.config.printerMac,
+                        service:  this.BLE.SERVICE,
+                        characteristic: this.BLE.WRITE_CHAR,
+                        value: base64
+                    });
+                    // 短暂延迟避免溢出
+                    await new Promise(r => setTimeout(r, 20));
+                }
                 return true;
-                
             } catch (error) {
+                this.config.isConnected = false;
+                this.updateUI();
                 throw new Error(`发送到打印机失败: ${error.message}`);
             }
         },
